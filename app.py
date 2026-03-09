@@ -1,3 +1,7 @@
+import eventlet
+eventlet.monkey_patch()
+
+
 from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from flask_sqlalchemy import SQLAlchemy
@@ -175,4 +179,5 @@ if __name__ == '__main__':
         db.create_all()
     import os
     port = int(os.environ.get('PORT', 5000))
+
     socketio.run(app, debug=False, host='0.0.0.0', port=port)
