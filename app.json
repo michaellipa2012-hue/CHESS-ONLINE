@@ -1,0 +1,24 @@
+{
+  "name": "Chess Online",
+  "description": "Онлайн шахматы с регистрацией и игрой в реальном времени",
+  "image": "heroku/python",
+  "repository": "https://github.com/yourusername/chess-online",
+  "keywords": ["python", "flask", "socketio", "chess", "game"],
+  "env": {
+    "SECRET_KEY": {
+      "description": "Секретный ключ для Flask приложения",
+      "generator": "secret"
+    }
+  },
+  "formation": {
+    "web": {
+      "quantity": 1
+    }
+  },
+  "addons": ["heroku-postgresql:mini"],
+  "buildpacks": [
+    {
+      "url": "heroku/python"
+    }
+  ]
+}

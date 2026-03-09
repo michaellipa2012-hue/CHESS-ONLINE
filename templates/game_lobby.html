@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block title %}Лобби - Шахматы Онлайн{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2 style="text-align: center; margin-bottom: 30px;">Игровое лобби</h2>
+    
+    <div id="lobby-content">
+        <div style="text-align: center; margin-bottom: 30px;">
+            <h3>Выберите цвет фигур:</h3>
+            <div style="margin: 20px 0;">
+                <label style="margin-right: 20px;">
+                    <input type="radio" name="color" value="white" checked> Белые
+                </label>
+                <label style="margin-right: 20px;">
+                    <input type="radio" name="color" value="black"> Черные
+                </label>
+                <label>
+                    <input type="radio" name="color" value="random"> Случайно
+                </label>
+            </div>
+            
+            <button id="find-game-btn" class="btn">Найти игру</button>
+        </div>
+        
+        <div id="status" style="text-align: center; margin-top: 20px;"></div>
+    </div>
+</div>
+
+<script>
+const socket = io();
+
+document.getElementById('find-game-btn').addEventListener('click', function() {
+    const selectedColor = document.querySelector('input[name="color"]:checked').value;
+    
+    socket.emit('find_game', {color: selectedColor});
+    
+    document.getElementById('status').innerHTML = '<p>Поиск соперника...</p>';
+    this.disabled = true;
+});
+
+socket.on('game_found', function(data) {
+    document.getElementById('status').innerHTML = '<p>Игра найдена! Переход к игре...</p>';
+    setTimeout(() => {
+        window.location.href = '/game/' + data.game_id;
+    }, 1000);
+});
+
+socket.on('waiting_for_opponent', function(data) {
+    document.getElementById('status').innerHTML = '<p>Ожидание соперника...</p>';
+});
+</script>
+{% endblock %}

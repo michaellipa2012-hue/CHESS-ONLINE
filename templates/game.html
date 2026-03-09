@@ -1,0 +1,296 @@
+{% extends "base.html" %}
+
+{% block title %}Игра - Шахматы Онлайн{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+<style>
+    .game-container {
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+        gap: 30px;
+        flex-wrap: wrap;
+    }
+    
+    .chess-board {
+        border: 3px solid #2a5298;
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    }
+    
+    .board-row {
+        display: flex;
+    }
+    
+    .square {
+        width: 60px;
+        height: 60px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 36px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        position: relative;
+    }
+    
+    .square.light {
+        background-color: #f0d9b5;
+    }
+    
+    .square.dark {
+        background-color: #b58863;
+    }
+    
+    .square.selected {
+        background-color: #87CEEB !important;
+        box-shadow: inset 0 0 10px rgba(0,0,0,0.3);
+    }
+    
+    .square.possible-move {
+        background-color: #90EE90 !important;
+    }
+    
+    .square:hover {
+        opacity: 0.8;
+    }
+    
+    .game-info {
+        background: rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(10px);
+        border-radius: 15px;
+        padding: 20px;
+        min-width: 250px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    
+    .player-info {
+        margin-bottom: 15px;
+        padding: 10px;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.1);
+    }
+    
+    .current-turn {
+        background: rgba(76, 175, 80, 0.3) !important;
+        border: 2px solid #4CAF50;
+    }
+    
+    .piece {
+        user-select: none;
+        pointer-events: none;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="game-container">
+    <div class="chess-board" id="chess-board">
+        <!-- Доска будет создана JavaScript -->
+    </div>
+    
+    <div class="game-info">
+        <h3 style="text-align: center; margin-bottom: 20px;">Информация об игре</h3>
+        
+        <div class="player-info" id="white-player">
+            <strong>Белые:</strong> <span id="white-name">Ожидание...</span>
+        </div>
+        
+        <div class="player-info" id="black-player">
+            <strong>Черные:</strong> <span id="black-name">Ожидание...</span>
+        </div>
+        
+        <div style="text-align: center; margin: 20px 0;">
+            <strong>Ход: <span id="current-turn">Белых</span></strong>
+        </div>
+        
+        <div style="text-align: center;">
+            <a href="{{ url_for('index') }}" class="btn btn-secondary">Вернуться в лобби</a>
+        </div>
+    </div>
+</div>
+
+<script>
+const socket = io();
+const gameId = '{{ game_id }}';
+let board = [];
+let selectedSquare = null;
+let currentTurn = 'white';
+let playerColor = null;
+
+const pieceSymbols = {
+    'K': '♔', 'Q': '♕', 'R': '♖', 'B': '♗', 'N': '♘', 'P': '♙',
+    'k': '♚', 'q': '♛', 'r': '♜', 'b': '♝', 'n': '♞', 'p': '♟'
+};
+
+function createBoard() {
+    const boardElement = document.getElementById('chess-board');
+    boardElement.innerHTML = '';
+    
+    for (let row = 0; row < 8; row++) {
+        const rowElement = document.createElement('div');
+        rowElement.className = 'board-row';
+        
+        for (let col = 0; col < 8; col++) {
+            const square = document.createElement('div');
+            square.className = `square ${(row + col) % 2 === 0 ? 'light' : 'dark'}`;
+            square.dataset.row = row;
+            square.dataset.col = col;
+            
+            square.addEventListener('click', handleSquareClick);
+            
+            rowElement.appendChild(square);
+        }
+        
+        boardElement.appendChild(rowElement);
+    }
+}
+
+function updateBoard(boardState) {
+    board = boardState;
+    
+    for (let row = 0; row < 8; row++) {
+        for (let col = 0; col < 8; col++) {
+            const square = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+            const piece = board[row][col];
+            
+            if (piece !== '.') {
+                square.innerHTML = `<span class="piece">${pieceSymbols[piece] || piece}</span>`;
+            } else {
+                square.innerHTML = '';
+            }
+        }
+    }
+}
+
+function handleSquareClick(event) {
+    const row = parseInt(event.target.dataset.row);
+    const col = parseInt(event.target.dataset.col);
+    
+    // Проверяем, что это ход игрока
+    if (playerColor !== currentTurn) {
+        return;
+    }
+    
+    if (selectedSquare) {
+        // Делаем ход
+        const fromRow = selectedSquare.row;
+        const fromCol = selectedSquare.col;
+        
+        // Простая проверка хода (можно расширить)
+        if (isValidMove(fromRow, fromCol, row, col)) {
+            makeMove(fromRow, fromCol, row, col);
+        }
+        
+        clearSelection();
+    } else {
+        // Выбираем фигуру
+        const piece = board[row][col];
+        if (piece !== '.' && isPieceOwnedByPlayer(piece)) {
+            selectSquare(row, col);
+        }
+    }
+}
+
+function selectSquare(row, col) {
+    selectedSquare = {row, col};
+    const square = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+    square.classList.add('selected');
+}
+
+function clearSelection() {
+    if (selectedSquare) {
+        const square = document.querySelector(`[data-row="${selectedSquare.row}"][data-col="${selectedSquare.col}"]`);
+        square.classList.remove('selected');
+        selectedSquare = null;
+    }
+    
+    // Убираем подсветку возможных ходов
+    document.querySelectorAll('.possible-move').forEach(sq => {
+        sq.classList.remove('possible-move');
+    });
+}
+
+function isPieceOwnedByPlayer(piece) {
+    if (playerColor === 'white') {
+        return piece === piece.toUpperCase();
+    } else {
+        return piece === piece.toLowerCase();
+    }
+}
+
+function isValidMove(fromRow, fromCol, toRow, toCol) {
+    // Базовая проверка - не на ту же клетку и не на свою фигуру
+    if (fromRow === toRow && fromCol === toCol) return false;
+    
+    const targetPiece = board[toRow][toCol];
+    if (targetPiece !== '.' && isPieceOwnedByPlayer(targetPiece)) {
+        return false;
+    }
+    
+    return true; // Упрощенная логика
+}
+
+function makeMove(fromRow, fromCol, toRow, toCol) {
+    const move = {
+        from: {row: fromRow, col: fromCol},
+        to: {row: toRow, col: toCol},
+        piece: board[fromRow][fromCol]
+    };
+    
+    socket.emit('make_move', {
+        game_id: gameId,
+        move: move
+    });
+}
+
+function updateTurn(turn) {
+    currentTurn = turn;
+    document.getElementById('current-turn').textContent = turn === 'white' ? 'Белых' : 'Черных';
+    
+    // Обновляем подсветку игроков
+    document.getElementById('white-player').classList.toggle('current-turn', turn === 'white');
+    document.getElementById('black-player').classList.toggle('current-turn', turn === 'black');
+}
+
+// Socket.IO события
+socket.on('connect', function() {
+    socket.emit('join_game', {game_id: gameId});
+});
+
+socket.on('game_state', function(data) {
+    updateBoard(data.board);
+    updateTurn(data.turn);
+    
+    if (data.white_player) {
+        document.getElementById('white-name').textContent = data.white_player;
+        if (data.white_player === '{{ current_user.username }}') {
+            playerColor = 'white';
+        }
+    }
+    
+    if (data.black_player) {
+        document.getElementById('black-name').textContent = data.black_player;
+        if (data.black_player === '{{ current_user.username }}') {
+            playerColor = 'black';
+        }
+    }
+});
+
+socket.on('move_made', function(data) {
+    const move = data.move;
+    
+    // Обновляем доску
+    board[move.to.row][move.to.col] = board[move.from.row][move.from.col];
+    board[move.from.row][move.from.col] = '.';
+    
+    updateBoard(board);
+    updateTurn(data.turn);
+});
+
+// Инициализация
+createBoard();
+</script>
+{% endblock %}
